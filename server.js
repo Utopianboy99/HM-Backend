@@ -11,6 +11,7 @@ const { verifyToken } = require('./middleware/auth');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const dnsHost = process.env.DNS_HOST || 'localhost';
 
 // ── Service connection checks ─────────────────────────────────────────────
 async function checkMongoDB() {
@@ -102,7 +103,7 @@ async function boot() {
   });
 
   app.listen(port, () => {
-    console.log(`\n🚀 HustleMatch API running on http://localhost:${port}`);
+    console.log(`\n🚀 HustleMatch API running on http://${dnsHost}:${port}`);
     console.log('\n📋 Public endpoints:');
     console.log('   POST /auth/signup           — Create account (Firebase + MongoDB dual-write, no token issued)');
     console.log('   POST /auth/signin           — Sync profile after client-side Firebase sign-in (requires Bearer ID token)');
