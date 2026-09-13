@@ -1,0 +1,355 @@
+Base URL: http://localhost:3000
+
+# Start the application
+1. Create a `.env` file in the project root with your MongoDB URI:
+
+   MONGODB_URI="your-mongodb-connection-string"
+
+2. Install dependencies:
+
+   npm install
+
+3. Start the server:
+
+   node server.js
+
+4. Open the API in your browser or via cURL:
+
+   http://localhost:3000/
+
+# cURL command examples
+
+## Health check
+curl -X GET "http://localhost:3000/health"
+
+## Auth Endpoints (Public)
+
+### Sign up
+curl -X POST "http://localhost:3000/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "SecurePass123!",
+    "full_name": "John Doe",
+    "role": "freelancer",
+    "phone": "+27821234567"
+  }'
+
+### Sign in
+curl -X POST "http://localhost:3000/auth/signin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "SecurePass123!"
+  }'
+
+# After signin, you'll get a customToken. Use Firebase SDK to exchange it:
+# const userCredential = await signInWithCustomToken(auth, customToken);
+# const idToken = await userCredential.user.getIdToken();
+# Then use this idToken in Authorization header for protected endpoints
+
+## Users (Protected - requires Bearer token)
+
+### Get all users
+curl -X GET "http://localhost:3000/users" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific user
+curl -X GET "http://localhost:3000/users/user-uuid" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Create user (direct - for admin only)
+curl -X POST "http://localhost:3000/users" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "email": "alice@example.com",
+    "full_name": "Alice Dlamini",
+    "role": "freelancer",
+    "phone": "+27821234567",
+    "profile_photo_url": "https://example.com/photos/alice.jpg",
+    "bio": "Full-stack developer with 5 years of experience.",
+    "skills": ["JavaScript", "Node.js", "React"],
+    "location_city": "Johannesburg",
+    "location_country": "South Africa",
+    "lat": -26.2041,
+    "lng": 28.0473
+  }'
+
+### Update user
+curl -X PUT "http://localhost:3000/users/user-uuid" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "full_name": "Alice Updated",
+    "bio": "Updated developer profile.",
+    "skills": ["JavaScript", "Node.js", "React", "Python"]
+  }'
+
+### Delete user (soft delete)
+curl -X DELETE "http://localhost:3000/users/user-uuid" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+## Jobs (Protected - requires Bearer token)
+
+## Jobs (Protected - requires Bearer token)
+
+### Get all jobs
+curl -X GET "http://localhost:3000/jobs" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific job
+curl -X GET "http://localhost:3000/jobs/job-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Create job
+curl -X POST "http://localhost:3000/jobs" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "title": "Build a React Dashboard",
+    "description": "Need an experienced React developer to build an analytics dashboard.",
+    "category": "Web Development",
+    "tags": ["React", "JavaScript", "CSS"],
+    "location_city": "Johannesburg",
+    "location_country": "South Africa",
+    "is_remote": true,
+    "budget": 15000,
+    "payment_type": "fixed",
+    "currency": "ZAR",
+    "status": "open",
+    "slots": 1,
+    "duration_days": 30,
+    "start_date": "2026-06-01",
+    "deadline": "2026-06-30"
+  }'
+
+### Update job
+curl -X PUT "http://localhost:3000/jobs/job-id" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "status": "in_progress",
+    "budget": 16000,
+    "slots": 2
+  }'
+
+### Delete job (soft delete)
+curl -X DELETE "http://localhost:3000/jobs/job-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+## Applications (Protected - requires Bearer token)
+
+### Get all applications
+curl -X GET "http://localhost:3000/applications" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific application
+curl -X GET "http://localhost:3000/applications/app-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Apply for a job
+curl -X POST "http://localhost:3000/applications" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "job_id": "job-uuid",
+    "applicant_id": "user-uuid",
+    "proposed_rate": 12000,
+    "cover_letter": "I have 5 years of React experience and have built multiple dashboards.",
+    "attachments": ["https://example.com/portfolio.pdf"]
+  }'
+
+### Update application
+curl -X PUT "http://localhost:3000/applications/app-id" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "status": "accepted",
+    "client_note": "Excellent application.",
+    "reviewed_at": "2026-05-15T12:00:00.000Z"
+  }'
+
+### Delete application (soft delete)
+curl -X DELETE "http://localhost:3000/applications/app-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+## Transactions (Protected - requires Bearer token)
+
+### Get all transactions
+curl -X GET "http://localhost:3000/transactions" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific transaction
+curl -X GET "http://localhost:3000/transactions/txn-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Create transaction
+curl -X POST "http://localhost:3000/transactions" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "job_id": "job-uuid",
+    "application_id": "app-uuid",
+    "amount": 15000,
+    "payment_method": "bank_transfer",
+    "type": "payment",
+    "payer_id": "user-uuid-1",
+    "payee_id": "user-uuid-2",
+    "gateway_provider": "Peach Payments",
+    "gateway_ref": "PP-2026-001234",
+    "metadata": { "invoice_no": "INV-001" }
+  }'
+
+### Update transaction
+curl -X PUT "http://localhost:3000/transactions/txn-id" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "status": "completed",
+    "gateway_ref": "PP-2026-001235"
+  }'
+
+### Delete transaction
+curl -X DELETE "http://localhost:3000/transactions/txn-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+## Messages (Protected - requires Bearer token)
+
+### Get all messages
+curl -X GET "http://localhost:3000/messages" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific message
+curl -X GET "http://localhost:3000/messages/msg-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Send message
+curl -X POST "http://localhost:3000/messages" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "job_id": "job-uuid",
+    "sender_id": "user-uuid-1",
+    "receiver_id": "user-uuid-2",
+    "content": "Hi Alice, I loved your application! Can we schedule a call?",
+    "message_type": "text"
+  }'
+
+### Mark message as read
+curl -X PUT "http://localhost:3000/messages/msg-id" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "is_read": true
+  }'
+
+### Delete message (soft delete)
+curl -X DELETE "http://localhost:3000/messages/msg-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+## Notifications (Protected - requires Bearer token)
+
+### Get all notifications
+curl -X GET "http://localhost:3000/notifications" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Get specific notification
+curl -X GET "http://localhost:3000/notifications/notif-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+### Create notification
+curl -X POST "http://localhost:3000/notifications" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "user_id": "user-uuid",
+    "type": "application_accepted",
+    "title": "Your application was accepted!",
+    "body": "Bob Nkosi accepted your application for the React dashboard.",
+    "ref_entity": "applications",
+    "ref_entity_id": "app-uuid",
+    "channel": "in_app"
+  }'
+
+### Mark notification as read
+curl -X PUT "http://localhost:3000/notifications/notif-id" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE" \
+  -d '{
+    "is_read": true
+  }'
+
+### Delete notification
+curl -X DELETE "http://localhost:3000/notifications/notif-id" \
+  -H "Authorization: Bearer YOUR_ID_TOKEN_HERE"
+
+# Notes
+
+## Authentication Flow
+1. **Sign Up**: POST /auth/signup with email, password, full_name, role, phone
+   - Returns: `customToken`, `user` object
+   - Frontend exchanges `customToken` with Firebase to get `idToken`
+
+2. **Sign In**: POST /auth/signin with email, password
+   - Returns: `customToken`, `user` object
+   - Frontend exchanges `customToken` with Firebase to get `idToken`
+
+3. **Protected Requests**: Use `idToken` in Authorization header:
+   - `Authorization: Bearer <idToken>`
+
+## Getting Started for Testing
+
+### Step 1: Sign Up
+```bash
+curl -X POST "http://localhost:3000/auth/signup" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "testuser@example.com",
+    "password": "Test123!@#",
+    "full_name": "Test User",
+    "role": "freelancer",
+    "phone": "+27821234567"
+  }'
+```
+Save the `user.id` from the response.
+
+### Step 2: Sign In (or use idToken from Firebase)
+```bash
+curl -X POST "http://localhost:3000/auth/signin" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "testuser@example.com",
+    "password": "Test123!@#"
+  }'
+```
+
+### Step 3: Use idToken for Protected Endpoints
+Replace `YOUR_ID_TOKEN_HERE` with the actual Firebase ID token in all protected requests.
+
+## Important Notes
+- Replace `YOUR_ID_TOKEN_HERE` with actual Bearer token from Firebase
+- Replace placeholder IDs (like `job-id`, `user-uuid`) with real IDs from API responses
+- All protected endpoints require valid Authorization header
+- Rate limiting: 20 auth requests per 15 minutes
+- API uses soft deletes (deleted_at field) — deleted records aren't truly removed
+- All timestamps are in ISO 8601 format (UTC)
+
+
+
+
+
+Connecting to the instance via the PC 
+
+How to connect
+1. Open an SSH client
+
+2. Locate or download your private key file
+
+3. Ensure your key is not publicly viewable
+
+chmod 400 "Sanje_key.pem"
+
+4. Connect to your instance using its Public DNS
+
+ssh -i "Sanje_key.pem" ec2-user@ec2-54-211-24-25.compute-1.amazonaws.com
