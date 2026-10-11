@@ -4,9 +4,8 @@ const { randomUUID } = require('crypto');
 const VALID_STATUSES = ['pending', 'reviewed', 'accepted', 'rejected', 'withdrawn'];
 
 const applicationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  job_id: { type: String, required: true },
-  applicant_id: { type: String, required: true },
+  job_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
+  applicant_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   cover_letter: { type: String, default: null },
   proposed_rate: { type: Number, required: true },
   attachments: { type: [String], default: [] },

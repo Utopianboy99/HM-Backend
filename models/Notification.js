@@ -8,8 +8,7 @@ const VALID_TYPES = [
 ];
 
 const notificationSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  user_id: { type: String, required: true },
+  user_id: { type: mongoose.Schema.Types.ObjectId, required: true },
   type: { type: String, required: true, enum: VALID_TYPES },
   title: { type: String, required: true },
   body: { type: String, default: null },

@@ -1,9 +1,7 @@
 ﻿const express = require('express');
-const { randomUUID } = require('crypto');
+const mongoose = require('mongoose');
 const router = express.Router();
-const openai = require('../OpenAI/openai');
 const Transaction = require('../models/Transaction');
-const VALID_STATUSES = ['pending', 'completed', 'failed', 'refunded'];
 
 function log(op, data) {
   console.log(`\n${'='.repeat(55)}\n[TRANSACTIONS] ${op}\n${'-'.repeat(55)}`);
@@ -11,48 +9,27 @@ function log(op, data) {
   console.log('='.repeat(55));
 }
 
-router.post('/', async (req, res) => {
-  try {
-    const { job_id, payer_id, payee_id, amount, payment_method } = req.body;
-    if (!job_id || !payer_id || !payee_id || !amount || !payment_method) {
-      return res.status(400).json({ error: 'job_id, payer_id, payee_id, amount, and payment_method are required.' });
-    }
-
-    const transaction = new Transaction({
-      id: randomUUID(),
-      job_id,
-      payer_id,
-      payee_id,
-      amount: parseFloat(amount),
-      currency: req.body.currency || 'ZAR',
-      payment_method,
-      status: req.body.status || 'pending',
-      metadata: req.body.metadata || {},
-    });
-
-    await transaction.save();
-    log('CREATE', transaction);
-    return res.status(201).json(transaction);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to create transaction.' });
-  }
-});
-
+// ── GET /transactions ──────────────────────────────────────────────────────────
+// Read routes limited to the caller's own transactions
 router.get('/', async (req, res) => {
   try {
+    const callerId = req.user.mongoId;
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const skip = (page - 1) * limit;
 
-    const filter = { deleted_at: null };
+    const filter = { $or: [{ payer_id: callerId }, { payee_id: callerId }], deleted_at: null };
+
     if (req.query.job_id) filter.job_id = req.query.job_id;
-    if (req.query.payer_id) filter.payer_id = req.query.payer_id;
-    if (req.query.payee_id) filter.payee_id = req.query.payee_id;
     if (req.query.status) filter.status = req.query.status;
 
     const [transactions, total] = await Promise.all([
-      Transaction.find(filter).skip(skip).limit(limit).sort({ initiated_at: -1 }).exec(),
+      Transaction.find(filter)
+        .skip(skip)
+        .limit(limit)
+        .sort({ initiated_at: -1 })
+        .exec(),
       Transaction.countDocuments(filter).exec(),
     ]);
 
@@ -75,13 +52,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── GET /transactions/:id ────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const transaction = await Transaction.findOne({ id: req.params.id, deleted_at: null }).exec();
+    const transaction = await Transaction.findOne({
+      _id: req.params.id,
+      $or: [{ payer_id: req.user.mongoId }, { payee_id: req.user.mongoId }],
+      deleted_at: null,
+    }).exec();
+
     if (!transaction) {
       return res.status(404).json({ error: 'Transaction not found.' });
     }
-    log('READ ONE', transaction);
+
     return res.json(transaction);
   } catch (error) {
     console.error(error);
@@ -89,56 +72,22 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
-  try {
-    const protectedFields = ['id', 'job_id', 'payer_id', 'payee_id', 'initiated_at', 'deleted_at'];
-    const updates = { ...req.body };
-    protectedFields.forEach((field) => delete updates[field]);
-
-    if (updates.status && !VALID_STATUSES.includes(updates.status)) {
-      return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
-    }
-
-    if (updates.status === 'completed') {
-      updates.completed_at = new Date();
-    }
-
-    const transaction = await Transaction.findOneAndUpdate(
-      { id: req.params.id, deleted_at: null },
-      { ...updates, metadata: updates.metadata || {}, },
-      { new: true }
-    ).exec();
-
-    if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found.' });
-    }
-
-    log('UPDATE', transaction);
-    return res.json(transaction);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to update transaction.' });
-  }
+// ── POST /transactions ────────────────────────────────────────────────────────
+// Phase: Paystack — disabled for MVP
+router.post('/', async (req, res) => {
+  return res.status(501).json({ error: 'Transaction creation is disabled for the MVP. Paystack integration pending.' });
 });
 
+// ── PUT /transactions/:id ─────────────────────────────────────────────────────
+// Phase: Paystack — disabled for MVP
+router.put('/:id', async (req, res) => {
+  return res.status(501).json({ error: 'Transaction update is disabled for the MVP. Paystack integration pending.' });
+});
+
+// ── DELETE /transactions/:id ──────────────────────────────────────────────────
+// Phase: Paystack — disabled for MVP
 router.delete('/:id', async (req, res) => {
-  try {
-    const transaction = await Transaction.findOneAndUpdate(
-      { id: req.params.id, deleted_at: null },
-      { deleted_at: new Date(), status: 'refunded' },
-      { new: true }
-    ).exec();
-
-    if (!transaction) {
-      return res.status(404).json({ error: 'Transaction not found.' });
-    }
-
-    log('DELETE (soft)', { id: transaction.id, deleted_at: transaction.deleted_at });
-    return res.json({ message: 'Transaction marked as refunded.', deleted_at: transaction.deleted_at });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to delete transaction.' });
-  }
+  return res.status(501).json({ error: 'Transaction deletion is disabled for the MVP. Paystack integration pending.' });
 });
 
 module.exports = router;

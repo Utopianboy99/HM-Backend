@@ -4,7 +4,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const OpenAI = require('openai');
 const admin = require('./firebase/firebase.config');
 const { connectDb } = require('./db');
 const { verifyToken } = require('./middleware/auth');
@@ -17,13 +16,34 @@ const dnsHost = process.env.DNS_HOST || 'localhost';
 async function checkMongoDB() {
   await connectDb();
   console.log('  ✅ MongoDB       connected');
-}
 
-async function checkOpenAI() {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  await openai.models.list();
-  console.log('  ✅ OpenAI        connected');
-  return openai;
+  // Ensure indexes after DB connection
+  const Job = require('./models/Job');
+  const Application = require('./models/Application');
+  const Message = require('./models/Message');
+  const Notification = require('./models/Notification');
+
+  // Jobs indexes
+  await Job.collection.createIndex({ status: 1, createdAt: -1 });
+  await Job.collection.createIndex({ userId: 1 });
+
+  // Applications indexes
+try {
+    await Application.collection.dropIndexes();
+    await Application.collection.createIndex({ job_id: 1, applicant_id: 1 }, { unique: true });
+  } catch {
+    await Application.collection.drop();
+    await Application.collection.createIndex({ job_id: 1, applicant_id: 1 }, { unique: true });
+  }
+  await Application.collection.createIndex({ applicant_id: 1 });
+
+  // Messages index
+  await Message.collection.createIndex({ conversation_id: 1, createdAt: 1 });
+
+  // Notifications index
+  await Notification.collection.createIndex({ user_id: 1, is_read: 1, createdAt: -1 });
+
+  console.log('  📋 MongoDB indexes ensured');
 }
 
 async function checkFirebase() {
@@ -43,17 +63,13 @@ async function boot() {
 
   const results = await Promise.allSettled([
     checkMongoDB(),
-    checkOpenAI(),
     checkFirebase(),
   ]);
 
-  const [mongo, openai, firebase] = results;
+  const [mongo, firebase] = results;
 
   if (mongo.status === 'rejected') {
     console.error('  ❌ MongoDB       failed —', mongo.reason?.message);
-  }
-  if (openai.status === 'rejected') {
-    console.error('  ❌ OpenAI        failed —', openai.reason?.message);
   }
   if (firebase.status === 'rejected') {
     console.error('  ❌ Firebase      failed —', firebase.reason?.message);
@@ -66,16 +82,30 @@ async function boot() {
   }
 
   app.use(helmet());
-  app.use(cors());
-  app.use(express.json());
+  app.use(cors({ origin: process.env.FRONTEND_ORIGIN.split(',') }));
+  app.use(express.json({ limit: '100kb' }));
+  app.set('trust proxy', 1);
 
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (req) => req.user?.mongoId || req.ip || 'public',
     message: { error: 'Too many requests. Try again later.' },
   });
+
+  // ── Central error handler ──────────────────────────────────────────────
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err.message, err.stack);
+    const status = err.status || 500;
+    res.status(status).json({ error: err.message || 'Internal server error.' });
+  });
+
+  // ── Async wrapper so thrown errors never crash the process ────────────────
+  const asyncWrapper = (fn) => (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
 
   // ── Public routes ─────────────────────────────────────────────────────────
   // Note: POST /auth/signin is public at the router level but internally

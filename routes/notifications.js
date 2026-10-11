@@ -1,9 +1,9 @@
 ﻿const express = require('express');
-const { randomUUID } = require('crypto');
+const mongoose = require('mongoose');
 const router = express.Router();
-const openai = require('../OpenAI/openai');
 const Notification = require('../models/Notification');
-const VALID_CHANNELS = ['in_app', 'email', 'sms', 'push'];
+const { notify } = require('../services/notify');
+
 const VALID_TYPES = [
   'new_application', 'application_accepted', 'application_rejected',
   'new_message', 'payment_received', 'job_posted', 'review_received', 'system',
@@ -15,52 +15,26 @@ function log(op, data) {
   console.log('='.repeat(55));
 }
 
-router.post('/', async (req, res) => {
-  try {
-    const { user_id, type, title, channel } = req.body;
-    if (!user_id || !type || !title || !channel) {
-      return res.status(400).json({ error: 'user_id, type, title, and channel are required.' });
-    }
-    if (!VALID_CHANNELS.includes(channel)) {
-      return res.status(400).json({ error: `channel must be one of: ${VALID_CHANNELS.join(', ')}` });
-    }
-    if (!VALID_TYPES.includes(type)) {
-      return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
-    }
-
-    const notification = new Notification({
-      id: randomUUID(),
-      user_id,
-      type,
-      title,
-      body: req.body.body || null,
-      ref_entity: req.body.ref_entity || null,
-      ref_entity_id: req.body.ref_entity_id || null,
-      channel,
-    });
-
-    await notification.save();
-    log('CREATE', notification);
-    return res.status(201).json(notification);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to create notification.' });
-  }
-});
-
+// ── GET /notifications ────────────────────────────────────────────────────────
+// Callers only see their own notifications
 router.get('/', async (req, res) => {
   try {
+    const userId = req.user.mongoId;
+
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
     const skip = (page - 1) * limit;
 
-    const query = {};
-    if (req.query.user_id) query.user_id = req.query.user_id;
+    const query = { user_id: userId };
     if (req.query.is_read !== undefined) query.is_read = req.query.is_read === 'true';
     if (req.query.type) query.type = req.query.type;
 
     const [notifications, total] = await Promise.all([
-      Notification.find(query).skip(skip).limit(limit).sort({ created_at: -1 }).exec(),
+      Notification.find(query)
+        .skip(skip)
+        .limit(limit)
+        .sort({ created_at: -1 })
+        .exec(),
       Notification.countDocuments(query).exec(),
     ]);
 
@@ -83,33 +57,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+// ── PUT /notifications/:id/read ──────────────────────────────────────────────
+router.put('/:id/read', async (req, res) => {
   try {
-    const notification = await Notification.findOne({ id: req.params.id }).exec();
-    if (!notification) {
-      return res.status(404).json({ error: 'Notification not found.' });
-    }
-    log('READ ONE', notification);
-    return res.json(notification);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to fetch notification.' });
-  }
-});
-
-router.put('/:id', async (req, res) => {
-  try {
-    const updates = {};
-    if (req.body.is_read !== undefined) {
-      updates.is_read = req.body.is_read;
-      if (req.body.is_read === true) {
-        updates.read_at = new Date();
-      }
-    }
+    const notificationId = req.params.id;
+    const userId = req.user.mongoId;
 
     const notification = await Notification.findOneAndUpdate(
-      { id: req.params.id },
-      updates,
+      { _id: notificationId, user_id: userId },
+      { is_read: true, read_at: new Date() },
       { new: true }
     ).exec();
 
@@ -117,26 +73,40 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Notification not found.' });
     }
 
-    log('UPDATE (mark read)', notification);
+    log('UPDATE (mark read)', { _id: notification._id, is_read: notification.is_read });
     return res.json(notification);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'Failed to update notification.' });
+    return res.status(500).json({ error: 'Failed to mark notification as read.' });
   }
 });
 
+// ── DELETE /notifications/:id ────────────────────────────────────────────────
+// Optional: delete a notification (admin or owner)
 router.delete('/:id', async (req, res) => {
   try {
-    const notification = await Notification.findOneAndDelete({ id: req.params.id }).exec();
+    const notificationId = req.params.id;
+    const userId = req.user.mongoId;
+
+    const notification = await Notification.findOneAndDelete({
+      _id: notificationId,
+      user_id: userId,
+    }).exec();
+
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found.' });
     }
-    log('DELETE', { id: notification.id, title: notification.title });
-    return res.json({ message: `Notification '${notification.title}' deleted.`, id: notification.id });
+
+    log('DELETE', { _id: notification._id, title: notification.title });
+    return res.json({ message: 'Notification deleted.' });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to delete notification.' });
   }
 });
+
+// ── POST /notifications ──────────────────────────────────────────────────────
+// Removed: notifications are created only by server code via services/notify.js
+// This route is intentionally not implemented; use the notify service instead.
 
 module.exports = router;

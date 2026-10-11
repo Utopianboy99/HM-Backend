@@ -165,7 +165,7 @@ router.post('/signup', async (req, res) => {
   return res.status(201).json({
     message: 'Account created successfully.',
     user: {
-      id: user.id,
+      _id: user._id,
       firebase_uid: firebaseUser.uid,
       email: user.email,
       full_name: user.full_name,
@@ -226,7 +226,7 @@ router.post('/signin', async (req, res) => {
   return res.status(200).json({
     message: 'Signed in successfully.',
     user: {
-      id: user.id,
+      _id: user._id,
       firebase_uid: user.firebase_uid,
       email: user.email,
       full_name: user.full_name,

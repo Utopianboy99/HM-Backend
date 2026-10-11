@@ -2,10 +2,9 @@ const mongoose = require('mongoose');
 const { randomUUID } = require('crypto');
 
 const messageSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  conversation_id: { type: String, required: true },
-  sender_id: { type: String, required: true },
-  recipient_id: { type: String, required: true },
+  conversation_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+  sender_id: { type: mongoose.Schema.Types.ObjectId, required: true },
+  recipient_id: { type: mongoose.Schema.Types.ObjectId, required: true },
   body: { type: String, required: true },
   attachments: { type: [String], default: [] },
   is_read: { type: Boolean, default: false },

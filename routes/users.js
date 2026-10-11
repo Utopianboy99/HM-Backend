@@ -1,10 +1,8 @@
 ﻿const express = require('express');
 const { randomUUID } = require('crypto');
 const router = express.Router();
-const { verifyToken } = require('../middleware/auth');
+const { requireRole } = require('../middleware/auth');
 const User = require('../models/User');
-const VALID_ROLES = ['freelancer', 'client', 'admin'];
-const openai = require('../OpenAI/openai.js');
 
 function log(op, data) {
   console.log(`\n${'='.repeat(55)}\n[USERS] ${op}\n${'-'.repeat(55)}`);
@@ -12,47 +10,11 @@ function log(op, data) {
   console.log('='.repeat(55));
 }
 
-router.post('/', async (req, res) => {
-  try {
-    const { email, full_name, role } = req.body;
-    if (!email || !full_name || !role) {
-      return res.status(400).json({ error: 'email, full_name, and role are required.' });
-    }
-    if (!VALID_ROLES.includes(role)) {
-      return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` });
-    }
+// ── DELETE POST /users ──
+// Signup is handled by POST /auth/signup; this route is removed.
 
-    const existing = await User.findOne({ email, deleted_at: null }).exec();
-    if (existing) {
-      return res.status(409).json({ error: 'A user with this email already exists.' });
-    }
-
-    const user = new User({
-      id: randomUUID(),
-      email,
-      password_hash: req.body.password_hash || null,
-      full_name,
-      phone: req.body.phone || null,
-      role,
-      profile_photo_url: req.body.profile_photo_url || null,
-      bio: req.body.bio || null,
-      skills: req.body.skills || [],
-      location_city: req.body.location_city || null,
-      location_country: req.body.location_country || null,
-      lat: req.body.lat || null,
-      lng: req.body.lng || null,
-    });
-
-    await user.save();
-    log('CREATE', user);
-    return res.status(201).json(user);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Failed to create user.' });
-  }
-});
-
-router.get('/', async (req, res) => {
+// ── GET /users ────────────────────────────────────────────────────────────────
+router.get('/', requireRole('admin'), async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
@@ -82,35 +44,101 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ── GET /users/:id ────────────────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const user = await User.findOne({ id: req.params.id, deleted_at: null }).exec();
+    const targetId = req.params.id;
+    const caller = req.user.mongoId;
+
+    // Allow caller to read their own full profile, admin sees all
+    const filter = { deleted_at: null };
+    if (caller !== targetId) {
+      // Non-admin callers only get public fields
+      filter._id = true; // will still find, but we'll limit projection
+    }
+
+    const user = await User.findById(targetId, { deleted_at: null }).exec();
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
-    log('READ ONE', user);
-    return res.json(user);
+
+    // Non-admin, non-owner: return only public fields
+    if (caller !== targetId) {
+      return res.json({
+        _id: user._id,
+        full_name: user.full_name,
+        bio: user.bio,
+        skills: user.skills,
+        city: user.location_city,
+        rating: user.avg_rating,
+      });
+    }
+
+    // Owner or admin: return full profile
+    return res.json({
+      _id: user._id,
+      firebase_uid: user.firebase_uid,
+      email: user.email,
+      full_name: user.full_name,
+      phone: user.phone,
+      role: user.role,
+      profile_photo_url: user.profile_photo_url,
+      bio: user.bio,
+      skills: user.skills,
+      location_city: user.location_city,
+      location_country: user.location_country,
+      lat: user.lat,
+      lng: user.lng,
+      is_verified: user.is_verified,
+      is_active: user.is_active,
+      last_login_at: user.last_login_at,
+      avg_rating: user.avg_rating,
+      total_reviews: user.total_reviews,
+      onboarding_step: user.onboarding_step,
+      onboarding_completed: user.onboarding_completed,
+      onboarding_completed_at: user.onboarding_completed_at,
+      goals: user.goals,
+      availability: user.availability,
+      profile_strength: user.profile_strength,
+      interests: user.interests,
+      work_style: user.work_style,
+      portfolio_links: user.portfolio_links,
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to fetch user.' });
   }
 });
 
+// ── PUT /users/:id ────────────────────────────────────────────────────────────
 router.put('/:id', async (req, res) => {
   try {
-    const protectedFields = ['id', 'created_at', 'deleted_at', 'avg_rating', 'total_reviews'];
-    const updates = { ...req.body };
-    protectedFields.forEach((field) => delete updates[field]);
+    const targetId = req.params.id;
+    const caller = req.user.mongoId;
 
-    if (updates.role && !VALID_ROLES.includes(updates.role)) {
-      return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` });
+    // Only owner or admin can update
+    if (caller !== targetId) {
+      return res.status(403).json({ error: 'Only the owner can update this profile.' });
     }
 
-    updates.updated_at = new Date();
+    // Whitelist updatable fields — never allow client to set: role, is_verified,
+    // firebase_uid, avg_rating, total_reviews, views_count, applications_count, any *_at
+    const whitelisted = [
+      'full_name', 'phone', 'bio', 'skills',
+      'location_city', 'location_country', 'profile_photo_url',
+    ];
+    const updates = {};
+    for (const key of whitelisted) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
 
     const user = await User.findOneAndUpdate(
-      { id: req.params.id, deleted_at: null },
-      updates,
+      { _id: targetId, deleted_at: null },
+      { ...updates, updated_at: new Date() },
       { new: true }
     ).exec();
 
@@ -126,10 +154,19 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// ── DELETE /users/:id ────────────────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
+    const targetId = req.params.id;
+    const caller = req.user.mongoId;
+
+    // Only owner or admin can delete
+    if (caller !== targetId) {
+      return res.status(403).json({ error: 'Only the owner can delete this profile.' });
+    }
+
     const user = await User.findOneAndUpdate(
-      { id: req.params.id, deleted_at: null },
+      { _id: targetId, deleted_at: null },
       { deleted_at: new Date(), is_active: false, updated_at: new Date() },
       { new: true }
     ).exec();
@@ -139,7 +176,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     log('DELETE (soft)', { id: user.id, full_name: user.full_name });
-    return res.json({ message: `User '${user.full_name}' has been deleted.`, deleted_at: user.deleted_at });
+    return res.json({ message: `User '${user.full_name}' has been deleted.` });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Failed to delete user.' });

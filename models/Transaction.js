@@ -4,10 +4,9 @@ const { randomUUID } = require('crypto');
 const VALID_STATUSES = ['pending', 'completed', 'failed', 'refunded'];
 
 const transactionSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, index: true },
-  job_id: { type: String, required: true },
-  payer_id: { type: String, required: true },
-  payee_id: { type: String, required: true },
+  job_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
+  payer_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  payee_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   amount: { type: Number, required: true },
   currency: { type: String, required: true, default: 'ZAR' },
   payment_method: { type: String, required: true },

@@ -45,7 +45,6 @@ const VALID_GOALS = [
 const VALID_AVAILABILITY = ['full_time', 'part_time', 'open', 'not_looking'];
 
 const UserSchema = new Schema({
-  id:            { type: String, required: true, unique: true, index: true },
   firebase_uid:  { type: String, required: true, unique: true, index: true },
 
   email:         { type: String, required: true, unique: true, index: true },
